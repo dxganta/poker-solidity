@@ -41,7 +41,7 @@ library PokerHandUtils {
 	// Suits of Cards
 	enum CardSuit { Clubs, Diamonds, Hearts, Spades }
 	// Type of hand from High card to Royal flush
-	enum HandEnum { RoyalFlush, StraightFlush, FourOfAKind, FullHouse, Flush, Straight, ThreeOfAKind, TwoPair, Pair, HighCard  }
+	enum HandEnum { RoyalFlush, StraightFlush, FourOfAKind, FullHouse, Flush, Straight, ThreeOfAKind, TwoPair, Pair, HighCard }
 	
 	// Convert a card to standard card name pair
 	function getCardName(int8 code) public pure returns (CardValue, CardSuit) {
