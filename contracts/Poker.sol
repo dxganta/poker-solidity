@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import {Ownable} from "../interfaces/openzeppelin/access/Ownable.sol";
-import {IERC20} from "../interfaces/openzeppelin/token/ERC20/IERC20.sol";
-import {PokerHandUtils} from "./libraries/PokerHandUtils.sol";
+import {Ownable} from "../interfaces/Ownable.sol";
+import {IERC20} from "../interfaces/IERC20.sol";
+// import {PokerHandUtils} from "./libraries/PokerHandUtils.sol";
 
 contract Poker is Ownable {
 
@@ -35,12 +35,12 @@ contract Poker is Ownable {
         TableState state;
         uint totalHands; // total Hands till now
         uint currentRound; // index of the current round
-        Round[4] rounds; // an array containing the 4 rounds
         uint buyInAmount;
         uint maxPlayers;
         address[] players;
         uint pot;
         uint bigBlind;
+        IERC20 token; // the token to be used to play in the table
     }
     struct Round {
         bool state; // state of the round, if this is active or not
@@ -58,7 +58,6 @@ contract Poker is Ownable {
         int8 card2;
     }
 
-    IERC20 public immutable token;
     uint public totalTables;
     // id => Table
     mapping(uint => Table) public tables;
@@ -67,15 +66,12 @@ contract Poker is Ownable {
     mapping(address => mapping(uint => uint)) public chips;
     // player => tableId => handNum => PlayerCardHashes
     mapping(address => mapping(uint => mapping(uint => PlayerCardHashes))) public playerHashes;
-    
-    constructor(address _token) {
-        token = IERC20(_token);
-    }
+    // tableId => roundNum => Round
+    mapping(uint => mapping(uint => Round)) rounds;
 
-    function createTable(uint _buyInAmount, uint _maxPlayers, uint _bigBlind) external {
+    function createTable(uint _buyInAmount, uint _maxPlayers, uint _bigBlind, address _token) external {
        
        address[] memory empty;
-       Round[4] memory rounds;
        
         tables[totalTables] =  Table({
             state: TableState.Inactive,
@@ -84,9 +80,9 @@ contract Poker is Ownable {
             buyInAmount: _buyInAmount,
             maxPlayers: _maxPlayers,
             players: empty,
-            rounds: rounds,
             pot: 0,
-            bigBlind: _bigBlind
+            bigBlind: _bigBlind,
+            token: IERC20(_token)
         });
 
         emit NewTableCreated(tables[totalTables]);
@@ -102,7 +98,7 @@ contract Poker is Ownable {
         require(table.players.length < table.maxPlayers, "Table full");
 
         // transfer buyIn Amount from player to contract
-        require(token.transferFrom(msg.sender, address(this), _amount));
+        require(table.token.transferFrom(msg.sender, address(this), _amount));
         chips[msg.sender][_tableId] += _amount;
 
         // add player to table
@@ -123,7 +119,7 @@ contract Poker is Ownable {
         table.state = TableState.Active;
 
         // initiate the first round
-        Round storage round = table.rounds[0];
+        Round storage round = rounds[_tableId][0];
 
         round.state = true;
         round.players = table.players;
@@ -147,7 +143,6 @@ contract Poker is Ownable {
 
         table.pot += table.bigBlind + (table.bigBlind/2);
 
-
         emit CardsDealt(_playerCards, _tableId);
     }
 
@@ -156,7 +151,7 @@ contract Poker is Ownable {
         Table storage table = tables[_tableId];
         require(table.state == TableState.Active, "No Active Round");
         
-        Round storage round = table.rounds[table.currentRound];
+        Round storage round = rounds[_tableId][table.currentRound];
         require(round.players[round.turn] == msg.sender, "Not your turn");
 
         if (_action == PlayerAction.Call) {
@@ -197,38 +192,38 @@ contract Poker is Ownable {
             _remove(round.turn, round.chips);
         }
 
-        _finishRound(_tableId, table, round);       
+        _finishRound(_tableId, table);       
     }
 
     /// @dev this method will be called by the offchain node with the
     /// keys of each card hash & the card,  dealt in the dealCards function
     /// this method will then verify them with the hashes stored 
     /// evaluate the cards, and send the pot earnings to the winner
-    function showdown(uint _tableId, uint[] memory _keys, PlayerCards[] memory _cards) external onlyOwner {
-        Table storage table = tables[_tableId];
-        require(table.state == TableState.Showdown);
+    // function showdown(uint _tableId, uint[] memory _keys, PlayerCards[] memory _cards) external onlyOwner {
+    //     Table storage table = tables[_tableId];
+    //     require(table.state == TableState.Showdown);
 
-        uint n = table.players.length;
-        require(_keys.length == n && _cards.length == n, "Incorrect arr length");
+    //     uint n = table.players.length;
+    //     require(_keys.length == n && _cards.length == n, "Incorrect arr length");
 
-        // verify the player hashes
-        for (uint i=0; i<n;i++) {
-            bytes32 givenHash1 = keccak256(abi.encodePacked(_keys[i], _cards[i].card1));
-            bytes32 givenHash2 = keccak256(abi.encodePacked(_keys[i], _cards[i].card2));
+    //     // verify the player hashes
+    //     for (uint i=0; i<n;i++) {
+    //         bytes32 givenHash1 = keccak256(abi.encodePacked(_keys[i], _cards[i].card1));
+    //         bytes32 givenHash2 = keccak256(abi.encodePacked(_keys[i], _cards[i].card2));
 
-            PlayerCardHashes memory hashes = playerHashes[table.players[i]][_tableId][table.totalHands];
+    //         PlayerCardHashes memory hashes = playerHashes[table.players[i]][_tableId][table.totalHands];
 
-            require(hashes.card1Hash == givenHash1, "incorrect cards");
-            require(hashes.card2Hash == givenHash2, "incorrect cards");
-        }
+    //         require(hashes.card1Hash == givenHash1, "incorrect cards");
+    //         require(hashes.card2Hash == givenHash2, "incorrect cards");
+    //     }
 
-        // now choose winner
-        PokerHandUtils.HandEnum[] memory hands;
-        for (uint i=0; i<n;i++) {
-            int8[5] memory cards = [];
-            (HandEnum hand,) = PokerHandUtils.evaluateHand();
-        }
-    }
+    //     // now choose winner
+    //     // PokerHandUtils.HandEnum[] memory hands;
+    //     // for (uint i=0; i<n;i++) {
+    //     //     int8[5] memory cards = [];
+    //     //     // (HandEnum hand,) = PokerHandUtils.evaluateHand();
+    //     // }
+    // }
 
     /// @dev method called by the offchain node to update the community cards for the next round
     /// @param _roundId The round for which the cards are being dealt (1=>Flop, 2=>Turn, 3=>River)
@@ -237,7 +232,8 @@ contract Poker is Ownable {
         emit CommunityCardsDealt(_tableId, _roundId, _cards);
     }
 
-    function _finishRound(uint _tableId, Table storage _table, Round storage _round) internal {
+    function _finishRound(uint _tableId, Table storage _table) internal {
+        Round storage _round = rounds[_tableId][_table.currentRound];
         // if all of the other players have folded then the remaining player automatically wins
         uint n = _round.players.length;
         bool allChipsEqual = _allElementsEqual(_round.chips); // checks if anybody has raised or not
@@ -248,7 +244,7 @@ contract Poker is Ownable {
             chips[_round.players[0]][_tableId] += _table.pot;
 
             // re initiate the table
-            _reInitiateTable(_table);
+            _reInitiateTable(_table, _tableId);
         } else if (allChipsEqual) {
             // all elements equal meaning nobody has raised
             if (_table.currentRound == 3) {
@@ -268,6 +264,8 @@ contract Poker is Ownable {
                 // so dont go to the next round
                 if (_round.turn == n-1) {
 
+                    // also emit an event if going to the next round which will tell the
+                    // offchain node to send the next card (flop, turn or river)
                     emit RoundOver(_tableId, _table.currentRound);
 
                      _table.currentRound += 1;
@@ -275,7 +273,7 @@ contract Poker is Ownable {
                     uint[] memory _chips = new uint[](n);
 
                     // initiate the next round
-                    _table.rounds[_table.currentRound] = Round({
+                    rounds[_tableId][_table.currentRound] = Round({
                         state: true,
                         turn : 0,
                         players: _round.players, // all living players from the last round
@@ -292,9 +290,6 @@ contract Poker is Ownable {
                 // just update the turn
                 _round.turn = _updateTurn(_round.turn, n);
         }
-
-        // note: also emit an event if going to the next round which will tell the
-        // offchain node to send the next card (flop, turn or river)
     }
 
       // updates the turn to the next player
@@ -305,17 +300,15 @@ contract Poker is Ownable {
         return _currentTurn + 1;
     } 
 
-    function _reInitiateTable(Table storage _table) internal {
-        Round[4] memory rounds;
+    function _reInitiateTable(Table storage _table, uint _tableId) internal {
 
         _table.state = TableState.Inactive;
         _table.totalHands += 1;
         _table.currentRound = 0;
-        _table.rounds = rounds;
         _table.pot = 0;
 
         // initiate the first round
-        Round storage round = _table.rounds[0];
+        Round storage round = rounds[_tableId][0];
         round.state = true;
         round.players = _table.players;
         round.highestChip = _table.bigBlind;
