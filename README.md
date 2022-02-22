@@ -1,7 +1,7 @@
 # Solidity Poker
 
 ```
-The contracts have not been tested. Use them at your own risk.
+The contracts have not been tested or audited. Use them at your own risk.
 ```
 
 ## Introduction
