@@ -19,11 +19,12 @@ contract Poker is Ownable {
         Fold
     }
 
-    event NewTableCreated(Table table);
+    event NewTableCreated(uint tableId, Table table);
     event NewBuyIn(uint tableId, address player, uint amount);
     event CardsDealt(PlayerCardHashes[] PlayerCardHashes, uint tableId);
     event RoundOver(uint tableId, uint round);
     event CommunityCardsDealt(uint tableId, uint roundId, uint8[] cards);
+    event TableShowdown(uint tableId);
 
     struct Table {
         TableState state;
@@ -77,6 +78,11 @@ contract Poker is Ownable {
         require(tables[_tableId].token.transfer(msg.sender, _amount));
     }
 
+    /// @dev creates a table 
+    /// @param _buyInAmount The minimum amount of tokens required to enter the table
+    /// @param _maxPlayers The maximum number of players allowed in this table
+    /// @param _bigBlind The big blinds for the table
+    /// @param _token The token that will be used to bet in this table
     function createTable(uint _buyInAmount, uint _maxPlayers, uint _bigBlind, address _token) external {
        
        address[] memory empty;
@@ -93,12 +99,14 @@ contract Poker is Ownable {
             token: IERC20(_token)
         });
 
-        emit NewTableCreated(tables[totalTables]);
+        emit NewTableCreated(totalTables, tables[totalTables]);
 
         totalTables += 1;
     }
 
     /// @dev first the players have to call this method to buy in and enter a table
+    /// @param _tableId the unique id of the table
+    /// @param _amount The amount of tokens to buy in the table. (must be greater than or equal to the minimum table buy in amount)
     function buyIn(uint _tableId, uint _amount) public {
         Table storage table = tables[_tableId];
 
@@ -123,7 +131,7 @@ contract Poker is Ownable {
         Table storage table = tables[_tableId];
         uint n = table.players.length;
         require(table.state == TableState.Inactive, "Game already going on");
-        require(_playerCards.length == n, "ERROR: PlayerCardHashes Length");
+        require(n > 1 && _playerCards.length == n, "ERROR: PlayerCardHashes Length");
         table.state = TableState.Active;
 
         // initiate the first round
@@ -287,11 +295,9 @@ contract Poker is Ownable {
             // all elements equal meaning nobody has raised
             if (_table.currentRound == 3) {
                 // if nobody has raised and this is the final round then go to evaluation
-                // todo: write evaluation logic here
                 _table.state = TableState.Showdown;
 
-                // then re-initiate the table
-                // _reInitiateTable(_table);
+                emit TableShowdown(_tableId);
             } else {
                 // if nobody has raised and this is not the final round
                 // and this is the last player
