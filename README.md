@@ -1,5 +1,9 @@
 # Solidity Poker
 
+```
+The contracts have not been tested. Use them at your own risk.
+```
+
 ## Introduction
 
 Creating fully decentralized Card Games has always been a difficult task due to the open nature of blockchains. Card games require a certain level of privacy, i.e the cards of a certain player must be private untill the game is over.
