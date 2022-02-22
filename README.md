@@ -30,7 +30,7 @@ So I have tried to come up with a Semi-Decentralized Solidity Poker Game, which 
 
 The code is for <strong>Texas Hold'em Poker</strong>.
 
-The primary contract is the (Poker.sol)[https://github.com/realdiganta/poker-solidity/blob/main/contracts/Poker.sol] contract with which the players will interact and the player funds will be stored.
+The primary contract is the [Poker.sol](https://github.com/realdiganta/poker-solidity/blob/main/contracts/Poker.sol) contract with which the players will interact and the player funds will be stored.
 
 ### createTable(uint buyInAmount, uint maxPlayers, uint bigBlind, address token)
 
