@@ -120,6 +120,14 @@ As a result the main evaluation logic in the [Evaluator7.sol](https://github.com
 
 This method can be called by the players to the withdraw the chips they have deposited into a table.
 
+## TODOS
+
+1. The code compiles & works theoretically but has not been still tested. Extensive automated unit testing scripts & manual testing is required.
+
+2. Testing of gas costs for all methods.
+
+3. Optimization of evaluation logic.
+
 ## Installation & Setup
 
 1. Install [Brownie](https://eth-brownie.readthedocs.io/en/stable/install.html) & [Ganache-CLI](https://www.npmjs.com/package/ganache-cli), if you haven't already.
@@ -136,3 +144,7 @@ Install the dependencies in the package
 ## Python Dependencies
 pip install -r requirements.txt
 ```
+
+## Notes
+
+1. Since the contracts in the flush & noFlush are very large, compilation takes a lot (very lot) of time. So suggestion would be compile them separately one by one and deploy.
