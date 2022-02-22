@@ -3,7 +3,7 @@ pragma solidity ^0.8.9;
 
 import {Ownable} from "../interfaces/Ownable.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
-// import {PokerHandUtils} from "./libraries/PokerHandUtils.sol";
+import {Evaluator7} from "./Evaluator7.sol";
 
 contract Poker is Ownable {
 
@@ -11,13 +11,7 @@ contract Poker is Ownable {
         Active,
         Inactive,
         Showdown
-    }
-    enum RoundState {
-        PreFlop,
-        Flop,
-        River,
-        Turn
-    }
+    }  
     enum PlayerAction {
         Call,
         Raise,
@@ -29,7 +23,7 @@ contract Poker is Ownable {
     event NewBuyIn(uint tableId, address player, uint amount);
     event CardsDealt(PlayerCardHashes[] PlayerCardHashes, uint tableId);
     event RoundOver(uint tableId, uint round);
-    event CommunityCardsDealt(uint tableId, uint roundId, int8[] cards);
+    event CommunityCardsDealt(uint tableId, uint roundId, uint8[] cards);
 
     struct Table {
         TableState state;
@@ -54,9 +48,11 @@ contract Poker is Ownable {
         bytes32 card2Hash;
     }
     struct PlayerCards {
-        int8 card1;
-        int8 card2;
+        uint8 card1;
+        uint8 card2;
     }
+
+    address public immutable EVALUATOR7;
 
     uint public totalTables;
     // id => Table
@@ -67,7 +63,19 @@ contract Poker is Ownable {
     // player => tableId => handNum => PlayerCardHashes
     mapping(address => mapping(uint => mapping(uint => PlayerCardHashes))) public playerHashes;
     // tableId => roundNum => Round
-    mapping(uint => mapping(uint => Round)) rounds;
+    mapping(uint => mapping(uint => Round)) public rounds;
+    // tableId => int8[] community cards
+    mapping(uint => uint8[]) public communityCards;
+
+    constructor(address _evaluator7) {
+        EVALUATOR7 = _evaluator7;
+    }
+
+    function withdrawChips(uint _amount, uint _tableId) external {
+        require(chips[msg.sender][_tableId] >= _amount, "Not enough balance");
+        chips[msg.sender][_tableId] -= _amount;
+        require(tables[_tableId].token.transfer(msg.sender, _amount));
+    }
 
     function createTable(uint _buyInAmount, uint _maxPlayers, uint _bigBlind, address _token) external {
        
@@ -199,36 +207,66 @@ contract Poker is Ownable {
     /// keys of each card hash & the card,  dealt in the dealCards function
     /// this method will then verify them with the hashes stored 
     /// evaluate the cards, and send the pot earnings to the winner
-    // function showdown(uint _tableId, uint[] memory _keys, PlayerCards[] memory _cards) external onlyOwner {
-    //     Table storage table = tables[_tableId];
-    //     require(table.state == TableState.Showdown);
+    /// @notice only send the keys & cards of the players who are still living
+    function showdown(uint _tableId, uint[] memory _keys, PlayerCards[] memory _cards) external onlyOwner {
+        Table storage table = tables[_tableId];
+        Round memory round = rounds[_tableId][3];
 
-    //     uint n = table.players.length;
-    //     require(_keys.length == n && _cards.length == n, "Incorrect arr length");
+        require(table.state == TableState.Showdown);
 
-    //     // verify the player hashes
-    //     for (uint i=0; i<n;i++) {
-    //         bytes32 givenHash1 = keccak256(abi.encodePacked(_keys[i], _cards[i].card1));
-    //         bytes32 givenHash2 = keccak256(abi.encodePacked(_keys[i], _cards[i].card2));
+        uint n = round.players.length;
+        require(_keys.length == n && _cards.length == n, "Incorrect arr length");
 
-    //         PlayerCardHashes memory hashes = playerHashes[table.players[i]][_tableId][table.totalHands];
+        // verify the player hashes
+        for (uint i=0; i<n;i++) {
+            bytes32 givenHash1 = keccak256(abi.encodePacked(_keys[i], _cards[i].card1));
+            bytes32 givenHash2 = keccak256(abi.encodePacked(_keys[i], _cards[i].card2));
 
-    //         require(hashes.card1Hash == givenHash1, "incorrect cards");
-    //         require(hashes.card2Hash == givenHash2, "incorrect cards");
-    //     }
+            PlayerCardHashes memory hashes = playerHashes[round.players[i]][_tableId][table.totalHands];
 
-    //     // now choose winner
-    //     // PokerHandUtils.HandEnum[] memory hands;
-    //     // for (uint i=0; i<n;i++) {
-    //     //     int8[5] memory cards = [];
-    //     //     // (HandEnum hand,) = PokerHandUtils.evaluateHand();
-    //     // }
-    // }
+            require(hashes.card1Hash == givenHash1, "incorrect cards");
+            require(hashes.card2Hash == givenHash2, "incorrect cards");
+        }
+
+        // now choose winner
+        address winner;
+        uint8 bestRank = 100;
+        
+        for (uint j=0; j < n;  j++) {
+            address player = round.players[j];
+            PlayerCards memory playerCards = _cards[j];
+
+            uint8[] memory cCards = communityCards[_tableId];
+
+            uint8 rank = Evaluator7(EVALUATOR7).handRank(
+                cCards[0],
+                cCards[1],
+                cCards[2],
+                cCards[3],
+                cCards[4],
+                playerCards.card1,
+                playerCards.card2
+            );
+
+            if (rank < bestRank) {
+                bestRank = rank;
+                winner = player;
+            }
+        }
+
+        // add to the winner's balance
+        require(winner != address(0), "Winner is zero address");
+        chips[winner][_tableId] += table.pot;
+        _reInitiateTable(table, _tableId);
+    }
 
     /// @dev method called by the offchain node to update the community cards for the next round
     /// @param _roundId The round for which the cards are being dealt (1=>Flop, 2=>Turn, 3=>River)
     /// @param _cards Code of each card(s), (as per the PokerHandUtils Library)
-    function dealCommunityCards(uint _tableId, uint _roundId, int8[] memory _cards) external onlyOwner {
+    function dealCommunityCards(uint _tableId, uint _roundId, uint8[] memory _cards) external onlyOwner {
+        for (uint i=0; i<_cards.length; i++) {
+            communityCards[_tableId].push(_cards[i]);
+        }
         emit CommunityCardsDealt(_tableId, _roundId, _cards);
     }
 
@@ -306,6 +344,7 @@ contract Poker is Ownable {
         _table.totalHands += 1;
         _table.currentRound = 0;
         _table.pot = 0;
+        delete communityCards[_tableId]; // delete the community cards of the previous round
 
         // initiate the first round
         Round storage round = rounds[_tableId][0];

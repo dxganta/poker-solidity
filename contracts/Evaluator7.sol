@@ -32,6 +32,16 @@ contract Evaluator7 {
     address[3] public  FLUSH_ADDRESSES;
     address[16] public NOFLUSH_ADDRESSES;
 
+    uint8 STRAIGHT_FLUSH  = 0;
+    uint8 FOUR_OF_A_KIND  = 1;
+    uint8 FULL_HOUSE      = 2;
+    uint8 FLUSH           = 3;
+    uint8 STRAIGHT        = 4;
+    uint8 THREE_OF_A_KIND = 5;
+    uint8 TWO_PAIR        = 6;
+    uint8 ONE_PAIR        = 7;
+    uint8 HIGH_CARD       = 8;
+
     uint[52] public binaries_by_id = [  // 52
         0x1,  0x1,  0x1,  0x1,
         0x2,  0x2,  0x2,  0x2,
@@ -74,6 +84,20 @@ contract Evaluator7 {
         for (uint j=0; j<_noflushes.length; j++) {
             NOFLUSH_ADDRESSES[j] = _noflushes[j];
         }
+    }
+
+    function handRank(uint a, uint b, uint c, uint d, uint e, uint f, uint g) public view returns (uint8) {
+        uint val = evaluate(a,b,c,d,e,f,g);
+
+        if (val > 6185) return HIGH_CARD;        // 1277 high card
+        if (val > 3325) return ONE_PAIR;        // 2860 one pair
+        if (val > 2467) return TWO_PAIR;         //  858 two pair
+        if (val > 1609) return THREE_OF_A_KIND;  //  858 three-kind
+        if (val > 1599) return STRAIGHT;         //   10 straights
+        if (val > 322)  return FLUSH;            // 1277 flushes
+        if (val > 166)  return FULL_HOUSE;       //  156 full house
+        if (val > 10)   return FOUR_OF_A_KIND;   //  156 four-kind
+        return STRAIGHT_FLUSH;                   //   10 straight-flushes
     }
 
     function evaluate(uint a, uint b, uint c , uint d, uint e, uint f, uint g) public view returns (uint) {
